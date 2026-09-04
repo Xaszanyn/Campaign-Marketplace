@@ -21,3 +21,9 @@ pnpm add drizzle-orm postgres
 
 pnpm add -D drizzle-kit
 ```
+
+# Data Model & Migration
+
+```cmd
+pnpm drizzle-kit generate
+```
