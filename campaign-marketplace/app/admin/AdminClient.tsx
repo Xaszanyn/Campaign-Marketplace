@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { trpc } from "@/lib/trpc";
-import { campaignStatusList } from "$/enums";
+import { campaignStatusList, platformList } from "$/enums";
+import { create as createCampaignSchema } from "&/campaign";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -45,7 +47,7 @@ const PAGE_SIZE = 10;
 export function AdminClient() {
   const router = useRouter();
   const [selectedCampaign, setSelectedCampaign] = useState<any>(null);
-  const [dialog, setDialog] = useState<"edit" | "delete" | "review" | null>(null);
+  const [dialog, setDialog] = useState<"create" | "edit" | "delete" | null>(null);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -76,23 +78,29 @@ export function AdminClient() {
     },
   });
 
-  const { data: submissions, refetch: refetchSubmissions } =
-    trpc.submission.listByCampaign.useQuery(
-      { campaign: selectedCampaign?.id || "", status: "pending" },
-      { enabled: dialog === "review" && !!selectedCampaign?.id },
-    );
-
-  const reviewed = () => {
-    refetchSubmissions();
-    refetch();
-  };
-
-  const approveMutation = trpc.submission.approve.useMutation({ onSuccess: reviewed });
-
-  const rejectMutation = trpc.submission.reject.useMutation({ onSuccess: reviewed });
+  const createMutation = trpc.campaign.create.useMutation({
+    onSuccess: () => {
+      setDialog(null);
+      createForm.reset();
+      refetch();
+    },
+  });
 
   const { register, handleSubmit, reset, watch, setValue } = useForm({
     resolver: zodResolver(campaignEditSchema),
+  });
+
+  const createForm = useForm({
+    resolver: zodResolver(createCampaignSchema),
+    defaultValues: {
+      title: "",
+      platforms: [] as (typeof platformList)[number][],
+      payout: undefined as unknown as number,
+      budget: undefined as unknown as number,
+      status: "draft" as const,
+      start: undefined as unknown as Date,
+      end: null,
+    },
   });
 
   const campaigns = response?.data || [];
@@ -125,9 +133,26 @@ export function AdminClient() {
     setDialog("delete");
   };
 
-  const handleReview = (campaign: any) => {
-    setSelectedCampaign(campaign);
-    setDialog("review");
+  const handleOpenCreate = () => {
+    createForm.reset({
+      title: "",
+      platforms: [],
+      payout: undefined as unknown as number,
+      budget: undefined as unknown as number,
+      status: "draft",
+      start: undefined as unknown as Date,
+      end: null,
+    });
+    setDialog("create");
+  };
+
+  const togglePlatform = (platform: (typeof platformList)[number]) => {
+    const current = createForm.watch("platforms") || [];
+    createForm.setValue(
+      "platforms",
+      current.includes(platform) ? current.filter((p) => p !== platform) : [...current, platform],
+      { shouldValidate: true },
+    );
   };
 
   return (
@@ -136,7 +161,7 @@ export function AdminClient() {
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-4xl font-bold">Admin Panel</h1>
           <div className="flex gap-2">
-            <Button>Create Campaign</Button>
+            <Button onClick={handleOpenCreate}>Create Campaign</Button>
             <Button
               variant="ghost"
               onClick={() => logoutMutation.mutate()}
@@ -201,8 +226,8 @@ export function AdminClient() {
                     <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDelete(campaign)}>
                       Delete
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => handleReview(campaign)}>
-                      Review
+                    <Button size="sm" variant="ghost" asChild>
+                      <Link href={`/admin/campaigns/${campaign.id}`}>Review</Link>
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -236,6 +261,125 @@ export function AdminClient() {
           </div>
         </div>
       </div>
+
+      {/* Create Dialog */}
+      <Dialog open={dialog === "create"} onOpenChange={(open) => !open && setDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Campaign</DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={createForm.handleSubmit((data) => createMutation.mutate(data))}
+            className="space-y-4"
+          >
+            <div>
+              <label className="text-sm font-medium">Title</label>
+              <Input {...createForm.register("title")} placeholder="Campaign title" />
+              {createForm.formState.errors.title && (
+                <p className="text-xs text-red-600 mt-1">{createForm.formState.errors.title.message}</p>
+              )}
+            </div>
+            <div>
+              <label className="text-sm font-medium">Platforms</label>
+              <div className="flex gap-2 mt-1">
+                {platformList.map((platform) => {
+                  const selected = (createForm.watch("platforms") || []).includes(platform);
+                  return (
+                    <Button
+                      key={platform}
+                      type="button"
+                      size="sm"
+                      variant={selected ? "default" : "outline"}
+                      onClick={() => togglePlatform(platform)}
+                    >
+                      {platform}
+                    </Button>
+                  );
+                })}
+              </div>
+              {createForm.formState.errors.platforms && (
+                <p className="text-xs text-red-600 mt-1">{createForm.formState.errors.platforms.message}</p>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">Payout (cents)</label>
+                <Input
+                  type="number"
+                  {...createForm.register("payout", { valueAsNumber: true })}
+                  placeholder="5000"
+                />
+                {createForm.formState.errors.payout && (
+                  <p className="text-xs text-red-600 mt-1">{createForm.formState.errors.payout.message}</p>
+                )}
+              </div>
+              <div>
+                <label className="text-sm font-medium">Budget (cents)</label>
+                <Input
+                  type="number"
+                  {...createForm.register("budget", { valueAsNumber: true })}
+                  placeholder="1000000"
+                />
+                {createForm.formState.errors.budget && (
+                  <p className="text-xs text-red-600 mt-1">{createForm.formState.errors.budget.message}</p>
+                )}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">Start date</label>
+                <Input
+                  type="date"
+                  {...createForm.register("start", {
+                    setValueAs: (value) => (value ? new Date(value) : undefined),
+                  })}
+                />
+                {createForm.formState.errors.start && (
+                  <p className="text-xs text-red-600 mt-1">{createForm.formState.errors.start.message}</p>
+                )}
+              </div>
+              <div>
+                <label className="text-sm font-medium">End date (optional)</label>
+                <Input
+                  type="date"
+                  {...createForm.register("end", {
+                    setValueAs: (value) => (value ? new Date(value) : null),
+                  })}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Status</label>
+              <Select
+                value={createForm.watch("status")}
+                onValueChange={(value) => createForm.setValue("status", value as any)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {campaignStatusList.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {status}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {createMutation.isError && (
+              <p className="text-sm text-red-600">{createMutation.error.message}</p>
+            )}
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={() => setDialog(null)} disabled={createMutation.isPending}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? "Creating..." : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={dialog === "edit"} onOpenChange={(open) => !open && setDialog(null)}>
@@ -318,53 +462,6 @@ export function AdminClient() {
             >
               {deleteMutation.isPending ? "Deleting..." : "Delete"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Review Dialog */}
-      <Dialog open={dialog === "review"} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Review Submissions: {selectedCampaign?.title}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {submissions && submissions.length > 0 ? (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {submissions.map((submission: any) => (
-                  <div key={submission.id} className="p-3 border rounded-lg space-y-2">
-                    <div className="text-sm">
-                      <p className="font-medium">URL: <a href={submission.postURL} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{submission.postURL}</a></p>
-                      <p className="text-slate-600">Platform: {submission.platform}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => approveMutation.mutate({ id: submission.id })}
-                        disabled={approveMutation.isPending || rejectMutation.isPending}
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-red-600"
-                        onClick={() => rejectMutation.mutate({ id: submission.id, rejectionReason: "Rejected by admin" })}
-                        disabled={approveMutation.isPending || rejectMutation.isPending}
-                      >
-                        Reject
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-slate-600">No pending submissions for this campaign.</p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button onClick={() => setDialog(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

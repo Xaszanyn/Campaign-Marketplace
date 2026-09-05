@@ -1,5 +1,6 @@
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import type { Context } from "#/trpc/context";
 import { db } from "@/db";
 import { submissions, campaigns, submissionMetrics } from "$";
@@ -28,19 +29,28 @@ export const submissionRouter = {
         .limit(1);
 
       if (!campaign.length) {
-        throw new Error("Campaign not found");
+        throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found" });
       }
 
       if (campaign[0].status !== "active") {
-        throw new Error("Campaign is not accepting submissions");
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Campaign is not accepting submissions",
+        });
       }
 
       if (!validatePostUrl(input.postUrl, campaign[0].platforms)) {
-        throw new Error("Invalid post URL for campaign platforms");
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Invalid post URL for campaign platforms",
+        });
       }
 
       if (await checkDuplicateSubmission(input.campaign, input.postUrl)) {
-        throw new Error("URL already submitted to this campaign");
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "URL already submitted to this campaign",
+        });
       }
 
       return db
@@ -119,7 +129,10 @@ export const submissionRouter = {
       const approved = await approveSubmissionSafe(input.id);
 
       if (!approved) {
-        throw new Error("Insufficient budget");
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Approving this submission would exceed the campaign budget",
+        });
       }
 
       return db

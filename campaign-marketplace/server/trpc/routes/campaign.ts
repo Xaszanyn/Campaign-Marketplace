@@ -1,7 +1,8 @@
-import { eq, ilike, and, count, SQL } from "drizzle-orm";
+import { eq, ilike, and, count, desc, inArray, SQL } from "drizzle-orm";
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { db } from "@/db";
-import { campaigns } from "$";
+import { campaigns, submissions, submissionMetrics } from "$";
 import { create, get, list, browse, update, delete_ } from "&/campaign";
 import { requireAdmin, requireCreator } from "#/trpc/middleware";
 
@@ -43,11 +44,80 @@ export const campaignRouter = {
       limit: input.limit,
     };
   }),
-  get: requireAdmin
-    .input(get)
-    .query(async ({ input }: { input: GetInput }) =>
-      db.select().from(campaigns).where(eq(campaigns.id, input.id)).limit(1),
-    ),
+  get: requireAdmin.input(get).query(async ({ input }: { input: GetInput }) => {
+    const rows = await db.select().from(campaigns).where(eq(campaigns.id, input.id)).limit(1);
+
+    if (!rows.length) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found" });
+    }
+
+    return rows[0];
+  }),
+  overview: requireAdmin.input(get).query(async ({ input }: { input: GetInput }) => {
+    const campaignRows = await db.select().from(campaigns).where(eq(campaigns.id, input.id)).limit(1);
+
+    if (!campaignRows.length) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found" });
+    }
+
+    const campaign = campaignRows[0];
+
+    const approvedSubmissions = await db
+      .select({ id: submissions.id })
+      .from(submissions)
+      .where(and(eq(submissions.campaign, input.id), eq(submissions.status, "approved")));
+
+    const approvedIds = approvedSubmissions.map((row) => row.id);
+
+    const latestMetrics = approvedIds.length
+      ? await db
+          .selectDistinctOn([submissionMetrics.submission], {
+            submission: submissionMetrics.submission,
+            views: submissionMetrics.views,
+          })
+          .from(submissionMetrics)
+          .where(inArray(submissionMetrics.submission, approvedIds))
+          .orderBy(submissionMetrics.submission, desc(submissionMetrics.date))
+      : [];
+
+    const totalApprovedViews = latestMetrics.reduce((sum, metric) => sum + metric.views, 0);
+    const budgetSpent = Math.floor(totalApprovedViews / 1000) * campaign.payout;
+    const budgetLeft = Math.max(0, campaign.budget - budgetSpent);
+
+    const dailyRows = approvedIds.length
+      ? await db
+          .select({ date: submissionMetrics.date, views: submissionMetrics.views })
+          .from(submissionMetrics)
+          .where(inArray(submissionMetrics.submission, approvedIds))
+      : [];
+
+    const viewsByDate = new Map<string, number>();
+    for (const row of dailyRows) {
+      viewsByDate.set(row.date, (viewsByDate.get(row.date) ?? 0) + row.views);
+    }
+
+    const start = new Date(campaign.start);
+    const today = new Date();
+    const end = campaign.end && new Date(campaign.end) < today ? new Date(campaign.end) : today;
+
+    const dailyViews: { date: string; views: number }[] = [];
+    for (
+      const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+      cursor <= end;
+      cursor.setUTCDate(cursor.getUTCDate() + 1)
+    ) {
+      const key = cursor.toISOString().split("T")[0];
+      dailyViews.push({ date: key, views: viewsByDate.get(key) ?? 0 });
+    }
+
+    return {
+      campaign,
+      totalApprovedViews,
+      budgetSpent,
+      budgetLeft,
+      dailyViews,
+    };
+  }),
   browse: requireCreator.input(browse).query(async ({ input }: { input: BrowseInput }) => {
     const conditions: SQL[] = [eq(campaigns.status, "active")];
 
