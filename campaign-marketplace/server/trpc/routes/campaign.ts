@@ -1,4 +1,4 @@
-import { eq, ilike, and, count } from "drizzle-orm";
+import { eq, ilike, and, count, SQL } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { campaigns } from "$";
@@ -12,7 +12,7 @@ type UpdateInput = z.infer<typeof update>;
 
 export const campaignRouter = {
   list: requireAdmin.input(list).query(async ({ input }: { input: ListInput }) => {
-    const conditions: (typeof campaigns.title)[] = [];
+    const conditions: SQL[] = [];
 
     if (input.search) {
       conditions.push(ilike(campaigns.title, `%${input.search}%`));

@@ -2,31 +2,23 @@ import { TRPCError } from "@trpc/server";
 import { procedure } from "#/trpc/init";
 import type { Context } from "#/trpc/context";
 
-type ProcedureNext = (opts: { ctx: Context }) => Promise<unknown>;
+export const requireAuth = procedure.use(async ({ ctx, next }) => {
+  if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
+  return next();
+});
 
-export const requireAuth = procedure.use(
-  async ({ ctx, next }: { ctx: Context; next: ProcedureNext }) => {
-    if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
-    return next({ ctx: { ...ctx, user: ctx.user } });
-  },
-);
+export const requireAdmin = procedure.use(async ({ ctx, next }) => {
+  if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
+  if (ctx.user.role !== "admin") {
+    throw new TRPCError({ code: "FORBIDDEN" });
+  }
+  return next();
+});
 
-export const requireAdmin = procedure.use(
-  async ({ ctx, next }: { ctx: Context; next: ProcedureNext }) => {
-    if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
-    if (ctx.user.role !== "admin") {
-      throw new TRPCError({ code: "FORBIDDEN" });
-    }
-    return next({ ctx: { ...ctx, user: ctx.user } });
-  },
-);
-
-export const requireCreator = procedure.use(
-  async ({ ctx, next }: { ctx: Context; next: ProcedureNext }) => {
-    if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
-    if (ctx.user.role !== "creator") {
-      throw new TRPCError({ code: "FORBIDDEN" });
-    }
-    return next({ ctx: { ...ctx, user: ctx.user } });
-  },
-);
+export const requireCreator = procedure.use(async ({ ctx, next }) => {
+  if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
+  if (ctx.user.role !== "creator") {
+    throw new TRPCError({ code: "FORBIDDEN" });
+  }
+  return next();
+});

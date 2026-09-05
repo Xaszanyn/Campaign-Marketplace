@@ -8,9 +8,7 @@ import { requireAdmin, requireCreator } from "#/trpc/middleware";
 import { validatePostUrl } from "#/services/validation";
 import { checkDuplicateSubmission } from "#/services/submission";
 import {
-  calculateEarnings,
-  checkBudgetAvailable,
-  maybeCampaignComplete,
+  approveSubmissionSafe,
 } from "#/services/approval";
 
 type CreateInput = z.infer<typeof create>;
@@ -58,31 +56,11 @@ export const submissionRouter = {
   approve: requireAdmin
     .input(approve)
     .mutation(async ({ input }: { input: ApproveInput }) => {
-      const submission = await db
-        .select()
-        .from(submissions)
-        .where(eq(submissions.id, input.id))
-        .limit(1);
+      const approved = await approveSubmissionSafe(input.id);
 
-      if (!submission.length) {
-        throw new Error("Submission not found");
-      }
-
-      const earnings = await calculateEarnings(input.id);
-
-      if (!(await checkBudgetAvailable(submission[0].campaign, earnings))) {
+      if (!approved) {
         throw new Error("Insufficient budget");
       }
-
-      await db
-        .update(submissions)
-        .set({
-          status: "approved",
-          updated: new Date(),
-        })
-        .where(eq(submissions.id, input.id));
-
-      await maybeCampaignComplete(submission[0].campaign);
 
       return db
         .select()
