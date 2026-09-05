@@ -39,14 +39,20 @@ const campaignEditSchema = z.object({
   status: z.enum(campaignStatusList),
 });
 
+const PAGE_SIZE = 10;
+
 export default function AdminPage() {
   const [selectedCampaign, setSelectedCampaign] = useState<any>(null);
   const [dialog, setDialog] = useState<"edit" | "delete" | "review" | null>(null);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const { data: response, refetch } = trpc.campaign.list.useQuery({
-    page: 1,
-    limit: 100,
-    search: "",
+    page,
+    limit: PAGE_SIZE,
+    search: search || undefined,
+    status: statusFilter === "all" ? undefined : (statusFilter as (typeof campaignStatusList)[number]),
   });
 
   const deleteMutation = trpc.campaign.delete.useMutation({
@@ -84,6 +90,18 @@ export default function AdminPage() {
   });
 
   const campaigns = response?.data || [];
+  const total = response?.total || 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setPage(1);
+  };
+
+  const handleStatusFilterChange = (value: string) => {
+    setStatusFilter(value);
+    setPage(1);
+  };
 
   const handleEdit = (campaign: any) => {
     setSelectedCampaign(campaign);
@@ -114,6 +132,28 @@ export default function AdminPage() {
           <Button>Create Campaign</Button>
         </div>
 
+        <div className="flex gap-3 mb-4">
+          <Input
+            placeholder="Search by title..."
+            value={search}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="max-w-xs"
+          />
+          <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              {campaignStatusList.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {status}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="bg-white rounded-lg shadow">
           <Table>
             <TableHeader>
@@ -125,7 +165,14 @@ export default function AdminPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {campaigns.map((campaign: any) => (
+              {campaigns.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-slate-500 py-8">
+                    No campaigns match your filters.
+                  </TableCell>
+                </TableRow>
+              ) : (
+              campaigns.map((campaign: any) => (
                 <TableRow key={campaign.id}>
                   <TableCell className="font-medium">{campaign.title}</TableCell>
                   <TableCell>
@@ -144,9 +191,34 @@ export default function AdminPage() {
                     </Button>
                   </TableCell>
                 </TableRow>
-              ))}
+              ))
+              )}
             </TableBody>
           </Table>
+
+          <div className="flex justify-between items-center px-4 py-3 border-t border-slate-200">
+            <p className="text-sm text-slate-500">
+              {total === 0 ? "0 results" : `Page ${page} of ${totalPages} · ${total} total`}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+              >
+                Previous
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
