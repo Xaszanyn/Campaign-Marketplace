@@ -262,7 +262,6 @@ export function AdminClient() {
         </div>
       </div>
 
-      {/* Create Dialog */}
       <Dialog open={dialog === "create"} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent>
           <DialogHeader>
@@ -381,7 +380,6 @@ export function AdminClient() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Dialog */}
       <Dialog open={dialog === "edit"} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent>
           <DialogHeader>
@@ -440,7 +438,6 @@ export function AdminClient() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Dialog */}
       <Dialog open={dialog === "delete"} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent>
           <DialogHeader>

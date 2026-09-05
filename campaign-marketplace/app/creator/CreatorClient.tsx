@@ -201,7 +201,6 @@ export function CreatorClient() {
         </Tabs>
       </div>
 
-      {/* Submit Clip Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>

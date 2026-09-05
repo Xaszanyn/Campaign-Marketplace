@@ -116,10 +116,15 @@ export async function approveSubmissionSafe(
       .select({ budget: campaigns.budget, payout: campaigns.payout })
       .from(campaigns)
       .where(eq(campaigns.id, submission[0].campaign))
+      .for("update")
       .limit(1);
 
     if (!campaign.length) {
       throw new Error("Campaign not found");
+    }
+
+    if (submission[0].status !== "pending") {
+      return false;
     }
 
     const results = await tx
