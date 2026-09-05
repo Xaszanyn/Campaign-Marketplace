@@ -1,6 +1,35 @@
-import { eq, sum, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { submissions, submissionMetrics, campaigns } from "$";
+
+type Executor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function getApprovedTotalViews(executor: Executor, campaignId: string): Promise<number> {
+  const approved = await executor
+    .select({ id: submissions.id })
+    .from(submissions)
+    .where(and(eq(submissions.campaign, campaignId), eq(submissions.status, "approved")));
+
+  const ids = approved.map((row) => row.id);
+  if (!ids.length) return 0;
+
+  const latestMetrics = await executor
+    .selectDistinctOn([submissionMetrics.submission], { views: submissionMetrics.views })
+    .from(submissionMetrics)
+    .where(inArray(submissionMetrics.submission, ids))
+    .orderBy(submissionMetrics.submission, desc(submissionMetrics.date));
+
+  return latestMetrics.reduce((sum, row) => sum + row.views, 0);
+}
+
+async function getApprovedBudgetSpent(
+  executor: Executor,
+  campaignId: string,
+  payoutPer1k: number,
+): Promise<number> {
+  const totalViews = await getApprovedTotalViews(executor, campaignId);
+  return Math.floor(totalViews / 1000) * payoutPer1k;
+}
 
 export async function calculateEarnings(submissionId: string): Promise<number> {
   const latest = await db
@@ -46,27 +75,12 @@ export async function checkBudgetAvailable(
 
   if (!campaign.length) return false;
 
-  const results = await db
-    .select({ totalViews: sum(submissionMetrics.views) })
-    .from(submissions)
-    .innerJoin(submissionMetrics, eq(submissions.id, submissionMetrics.submission))
-    .where(
-      and(
-        eq(submissions.campaign, campaignId),
-        eq(submissions.status, "approved"),
-      ),
-    );
-
-  const spent = results[0]?.totalViews || 0;
-  const totalSpent = typeof spent === "string" ? parseInt(spent) : spent;
-  const budgetSpent = Math.floor(totalSpent / 1000) * campaign[0].payout;
+  const budgetSpent = await getApprovedBudgetSpent(db, campaignId, campaign[0].payout);
 
   return budgetSpent + requiredAmount <= campaign[0].budget;
 }
 
-export async function maybeCampaignComplete(
-  campaignId: string,
-): Promise<void> {
+export async function maybeCampaignComplete(campaignId: string): Promise<void> {
   const campaign = await db
     .select({ budget: campaigns.budget, payout: campaigns.payout })
     .from(campaigns)
@@ -75,32 +89,14 @@ export async function maybeCampaignComplete(
 
   if (!campaign.length) return;
 
-  const results = await db
-    .select({ totalViews: sum(submissionMetrics.views) })
-    .from(submissions)
-    .innerJoin(submissionMetrics, eq(submissions.id, submissionMetrics.submission))
-    .where(
-      and(
-        eq(submissions.campaign, campaignId),
-        eq(submissions.status, "approved"),
-      ),
-    );
-
-  const spent = results[0]?.totalViews || 0;
-  const totalSpent = typeof spent === "string" ? parseInt(spent) : spent;
-  const budgetSpent = Math.floor(totalSpent / 1000) * campaign[0].payout;
+  const budgetSpent = await getApprovedBudgetSpent(db, campaignId, campaign[0].payout);
 
   if (budgetSpent >= campaign[0].budget) {
-    await db
-      .update(campaigns)
-      .set({ status: "completed" })
-      .where(eq(campaigns.id, campaignId));
+    await db.update(campaigns).set({ status: "completed" }).where(eq(campaigns.id, campaignId));
   }
 }
 
-export async function approveSubmissionSafe(
-  submissionId: string,
-): Promise<boolean> {
+export async function approveSubmissionSafe(submissionId: string): Promise<boolean> {
   return db.transaction(async (tx) => {
     const submission = await tx
       .select()
@@ -127,20 +123,7 @@ export async function approveSubmissionSafe(
       return false;
     }
 
-    const results = await tx
-      .select({ totalViews: sum(submissionMetrics.views) })
-      .from(submissions)
-      .innerJoin(submissionMetrics, eq(submissions.id, submissionMetrics.submission))
-      .where(
-        and(
-          eq(submissions.campaign, submission[0].campaign),
-          eq(submissions.status, "approved"),
-        ),
-      );
-
-    const spent = results[0]?.totalViews || 0;
-    const totalSpent = typeof spent === "string" ? parseInt(spent) : spent;
-    const budgetSpent = Math.floor(totalSpent / 1000) * campaign[0].payout;
+    const budgetSpent = await getApprovedBudgetSpent(tx, submission[0].campaign, campaign[0].payout);
 
     const latestMetric = await tx
       .select({ views: submissionMetrics.views })
@@ -164,22 +147,7 @@ export async function approveSubmissionSafe(
       })
       .where(eq(submissions.id, submissionId));
 
-    const finalResults = await tx
-      .select({ totalViews: sum(submissionMetrics.views) })
-      .from(submissions)
-      .innerJoin(submissionMetrics, eq(submissions.id, submissionMetrics.submission))
-      .where(
-        and(
-          eq(submissions.campaign, submission[0].campaign),
-          eq(submissions.status, "approved"),
-        ),
-      );
-
-    const finalSpent = finalResults[0]?.totalViews || 0;
-    const finalTotalSpent = typeof finalSpent === "string" ? parseInt(finalSpent) : finalSpent;
-    const finalBudgetSpent = Math.floor(finalTotalSpent / 1000) * campaign[0].payout;
-
-    if (finalBudgetSpent >= campaign[0].budget) {
+    if (budgetSpent + earnings >= campaign[0].budget) {
       await tx
         .update(campaigns)
         .set({ status: "completed" })
