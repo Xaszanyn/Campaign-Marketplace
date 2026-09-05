@@ -1,36 +1,34 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Campaign Marketplace
 
-## Getting Started
+## Setup
 
-First, run the development server:
+Requires Only Docker
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```cmd
+git clone https://github.com/Xaszanyn/Campaign-Marketplace.git
+
+cd Campaign-Marketplace
+
+docker compose up --build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Concurrency Handling
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Approving a submission runs inside a single database transaction that locks the campaign row for the duration of that approval. If two admins approve submissions on the same campaign at nearly the same time, the second approval has to wait until the first one finishes, and only then checks the remaining budget. This means the budget check always sees the up-to-date, committed number, not a value read before the other approval went through. If the budget is already used up by the time the second approval gets its turn, it fails instead of going through, so the total amount approved for a campaign can never exceed its budget, no matter how close together the approvals happen.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Disregarded Features
 
-## Learn More
+The pnpm ingest script only processes a single day (yesterday) each time it runs, it does not backfill or reconcile a full metrics history for a submission, so any day it wasn't run for is simply missing rather than filled in retroactively. There is also no repeating/scheduled job (cron, queue, etc.) wired up to run it automatically; it has to be triggered by hand each day. Both were left out because the spec only asks for a script behind pnpm ingest that simulates one sync, not a scheduler, but in a real deployment this would need a daily trigger (cron, a scheduled worker, etc.) plus a way to backfill gaps if a day gets missed.
 
-To learn more about Next.js, take a look at the following resources:
+### Potential Improvements
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+One admin approving a submission does not immediately update another admin's already-open review screen. If a second admin is looking at a stale queue where a submission still shows as pending, and acts on it after someone else already approved or rejected it, the screen only reflects the outcome after the next refetch, so the displayed status can appear to flip or get overridden once the page catches up with the server. The
+underlying transaction already guarantees only one approval can actually go through against the budget, so this is a stale-UI/cache-invalidation issue rather than a data-integrity one, but it's confusing in practice and rare enough that it hasn't been fixed yet. The fix would be invalidating or refetching the queue after any approve/reject mutation, or subscribing to live updates, so two admins working the same queue don't act on outdated information.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### AI Tooling
 
-## Deploy on Vercel
+Used Claude Code mainly for three things:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Project Setup
+- Dockerising & Debugging The Docker Setup
+- Front-End UI Component Usage
