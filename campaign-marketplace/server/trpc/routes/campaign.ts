@@ -1,12 +1,18 @@
 import { eq, ilike, and, count } from "drizzle-orm";
+import { z } from "zod";
 import { db } from "@/db";
 import { campaigns } from "$";
 import { create, get, list, update } from "&/campaign";
 import { requireAdmin } from "#/trpc/middleware";
 
+type ListInput = z.infer<typeof list>;
+type GetInput = z.infer<typeof get>;
+type CreateInput = z.infer<typeof create>;
+type UpdateInput = z.infer<typeof update>;
+
 export const campaignRouter = {
-  list: requireAdmin.input(list).query(async ({ input }: any) => {
-    const conditions = [];
+  list: requireAdmin.input(list).query(async ({ input }: { input: ListInput }) => {
+    const conditions: (typeof campaigns.title)[] = [];
 
     if (input.search) {
       conditions.push(ilike(campaigns.title, `%${input.search}%`));
@@ -37,15 +43,15 @@ export const campaignRouter = {
   }),
   get: requireAdmin
     .input(get)
-    .query(async ({ input }: any) =>
+    .query(async ({ input }: { input: GetInput }) =>
       db.select().from(campaigns).where(eq(campaigns.id, input.id)).limit(1),
     ),
   create: requireAdmin
     .input(create)
-    .mutation(async ({ input }: any) =>
+    .mutation(async ({ input }: { input: CreateInput }) =>
       db.insert(campaigns).values(input).returning(),
     ),
-  update: requireAdmin.input(update).mutation(async ({ input }: any) => {
+  update: requireAdmin.input(update).mutation(async ({ input }: { input: UpdateInput }) => {
     const { id, ...data } = input;
 
     return db

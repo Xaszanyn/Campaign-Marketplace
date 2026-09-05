@@ -8,13 +8,11 @@ const id = {
 
 export const create = z.object({
   campaign: z.string(),
-  creator: z.string(),
-  postURL: z.string().url(),
+  postUrl: z.string().url("Invalid URL"),
   platform: z.enum(platformList),
 });
 
 export const list = z.object({
-  creator: z.string(),
   status: z.enum(submissionStatusList).optional(),
 });
 
