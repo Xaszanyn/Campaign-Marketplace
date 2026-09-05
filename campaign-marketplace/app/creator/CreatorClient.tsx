@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { trpc } from "@/lib/trpc";
@@ -43,8 +44,13 @@ const statusVariant: Record<(typeof submissionStatusList)[number], "outline" | "
 };
 
 export function CreatorClient() {
+  const router = useRouter();
   const [selectedCampaign, setSelectedCampaign] = useState<any>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  const logoutMutation = trpc.user.logout.useMutation({
+    onSuccess: () => router.push("/"),
+  });
 
   const { data: response } = trpc.campaign.browse.useQuery({
     page: 1,
@@ -77,9 +83,18 @@ export function CreatorClient() {
   return (
     <div className="min-h-screen bg-slate-50 p-8">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold">Creator Panel</h1>
-          <p className="text-slate-500 mt-2">Browse active campaigns and track your submissions</p>
+        <div className="flex justify-between items-start mb-8">
+          <div>
+            <h1 className="text-4xl font-bold">Creator Panel</h1>
+            <p className="text-slate-500 mt-2">Browse active campaigns and track your submissions</p>
+          </div>
+          <Button
+            variant="ghost"
+            onClick={() => logoutMutation.mutate()}
+            disabled={logoutMutation.isPending}
+          >
+            {logoutMutation.isPending ? "Logging out..." : "Log out"}
+          </Button>
         </div>
 
         <Tabs defaultValue="campaigns">

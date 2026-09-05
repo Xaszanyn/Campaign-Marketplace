@@ -4,7 +4,7 @@ import { procedure } from "#/trpc/init";
 import { db } from "@/db";
 import { users } from "$";
 import { user } from "&/user";
-import { setUser } from "#/auth/session";
+import { setUser, clearUser } from "#/auth/session";
 
 type UserInput = z.infer<typeof user>;
 
@@ -32,5 +32,9 @@ export const userRouter = {
     await setUser(input.userId);
 
     return selectedUser[0];
+  }),
+  logout: procedure.mutation(async () => {
+    await clearUser();
+    return { success: true };
   }),
 };

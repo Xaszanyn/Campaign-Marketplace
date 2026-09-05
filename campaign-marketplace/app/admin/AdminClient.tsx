@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -42,11 +43,16 @@ const campaignEditSchema = z.object({
 const PAGE_SIZE = 10;
 
 export function AdminClient() {
+  const router = useRouter();
   const [selectedCampaign, setSelectedCampaign] = useState<any>(null);
   const [dialog, setDialog] = useState<"edit" | "delete" | "review" | null>(null);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  const logoutMutation = trpc.user.logout.useMutation({
+    onSuccess: () => router.push("/"),
+  });
 
   const { data: response, refetch } = trpc.campaign.list.useQuery({
     page,
@@ -129,7 +135,16 @@ export function AdminClient() {
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-4xl font-bold">Admin Panel</h1>
-          <Button>Create Campaign</Button>
+          <div className="flex gap-2">
+            <Button>Create Campaign</Button>
+            <Button
+              variant="ghost"
+              onClick={() => logoutMutation.mutate()}
+              disabled={logoutMutation.isPending}
+            >
+              {logoutMutation.isPending ? "Logging out..." : "Log out"}
+            </Button>
+          </div>
         </div>
 
         <div className="flex gap-3 mb-4">
