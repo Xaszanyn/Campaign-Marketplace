@@ -3,13 +3,54 @@ services:
     image: postgres:16
     container_name: campaign-marketplace-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:-wayv_service}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-please}
+      POSTGRES_DB: ${POSTGRES_DB:-campaign_marketplace}
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wayv_service} -d ${POSTGRES_DB:-campaign_marketplace}"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    build:
+      context: .
+      target: builder
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-wayv_service}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-please}
+      POSTGRES_DB: ${POSTGRES_DB:-campaign_marketplace}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+    command: sh -c "pnpm db:migrate && node --import tsx scripts/seed.ts"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    build:
+      context: .
+      target: runner
+    container_name: campaign-marketplace-app
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-wayv_service}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-please}
+      POSTGRES_DB: ${POSTGRES_DB:-campaign_marketplace}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      SESSION_SECRET: ${SESSION_SECRET:-dev-only-insecure-secret-change-me}
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   postgres_data:
