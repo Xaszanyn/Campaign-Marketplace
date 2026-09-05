@@ -15,7 +15,7 @@ export const userRouter = {
       })
       .from(users),
   ),
-  select: procedure.input(user).mutation(async ({ input }) => {
+  select: procedure.input(user).mutation(async ({ input }: any) => {
     const selectedUser = await db
       .select({ id: users.id })
       .from(users)

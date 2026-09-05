@@ -1,11 +1,11 @@
 import { eq, ilike, and, count } from "drizzle-orm";
-import { procedure } from "#/trpc/init";
 import { db } from "@/db";
 import { campaigns } from "$";
 import { create, get, list, update } from "&/campaign";
+import { requireAdmin } from "#/trpc/middleware";
 
 export const campaignRouter = {
-  list: procedure.input(list).query(async ({ input }) => {
+  list: requireAdmin.input(list).query(async ({ input }: any) => {
     const conditions = [];
 
     if (input.search) {
@@ -35,17 +35,17 @@ export const campaignRouter = {
       limit: input.limit,
     };
   }),
-  get: procedure
+  get: requireAdmin
     .input(get)
-    .query(async ({ input }) =>
+    .query(async ({ input }: any) =>
       db.select().from(campaigns).where(eq(campaigns.id, input.id)).limit(1),
     ),
-  create: procedure
+  create: requireAdmin
     .input(create)
-    .mutation(async ({ input }) =>
+    .mutation(async ({ input }: any) =>
       db.insert(campaigns).values(input).returning(),
     ),
-  update: procedure.input(update).mutation(async ({ input }) => {
+  update: requireAdmin.input(update).mutation(async ({ input }: any) => {
     const { id, ...data } = input;
 
     return db

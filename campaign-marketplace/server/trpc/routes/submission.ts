@@ -1,28 +1,27 @@
 import { eq } from "drizzle-orm";
-import { procedure } from "#/trpc/init";
 import { db } from "@/db";
 import { submissions } from "$";
 import { create, list, approve, reject } from "&/submission";
+import { requireAdmin, requireCreator } from "#/trpc/middleware";
 
 export const submissionRouter = {
-  create: procedure.input(create).mutation(async ({ input }) =>
+  create: requireCreator.input(create).mutation(async ({ input, ctx }: any) =>
     db
       .insert(submissions)
       .values({
         ...input,
+        creator: ctx.user.id,
         status: "pending",
       })
       .returning(),
   ),
-  list: procedure
-    .input(list)
-    .query(async ({ input }) =>
-      db
-        .select()
-        .from(submissions)
-        .where(eq(submissions.creator, input.creator)),
-    ),
-  approve: procedure.input(approve).mutation(async ({ input }) =>
+  list: requireCreator.input(list).query(async ({ ctx }: any) =>
+    db
+      .select()
+      .from(submissions)
+      .where(eq(submissions.creator, ctx.user.id)),
+  ),
+  approve: requireAdmin.input(approve).mutation(async ({ input }: any) =>
     db
       .update(submissions)
       .set({
@@ -32,7 +31,7 @@ export const submissionRouter = {
       .where(eq(submissions.id, input.id))
       .returning(),
   ),
-  reject: procedure.input(reject).mutation(async ({ input }) =>
+  reject: requireAdmin.input(reject).mutation(async ({ input }: any) =>
     db
       .update(submissions)
       .set({
