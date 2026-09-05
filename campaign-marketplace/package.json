@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest",
-    "ingest": "node --loader tsx scripts/ingest.ts"
+    "seed": "node --import tsx scripts/seed.ts",
+    "ingest": "node --import tsx scripts/ingest.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
@@ -38,6 +39,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "tailwindcss": "^4",
+    "tsx": "^4.23.13",
     "typescript": "^5",
     "vitest": "^1.6.1"
   }
