@@ -130,6 +130,7 @@ export function AdminClient() {
 
   const handleDelete = (campaign: any) => {
     setSelectedCampaign(campaign);
+    deleteMutation.reset();
     setDialog("delete");
   };
 
@@ -447,6 +448,9 @@ export function AdminClient() {
             <p className="text-sm text-slate-600">
               Are you sure you want to delete <strong>{selectedCampaign?.title}</strong>? This action cannot be undone.
             </p>
+            {deleteMutation.isError && (
+              <p className="text-sm text-red-600">{deleteMutation.error.message}</p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDialog(null)} disabled={deleteMutation.isPending}>

@@ -158,7 +158,26 @@ export const campaignRouter = {
       .where(eq(campaigns.id, id))
       .returning();
   }),
-  delete: requireAdmin.input(delete_).mutation(async ({ input }: { input: DeleteInput }) =>
-    db.delete(campaigns).where(eq(campaigns.id, input.id)).returning(),
-  ),
+  delete: requireAdmin.input(delete_).mutation(async ({ input }: { input: DeleteInput }) => {
+    const existingSubmissions = await db
+      .select({ id: submissions.id })
+      .from(submissions)
+      .where(eq(submissions.campaign, input.id))
+      .limit(1);
+
+    if (existingSubmissions.length) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Cannot delete a campaign that has submissions",
+      });
+    }
+
+    const rows = await db.delete(campaigns).where(eq(campaigns.id, input.id)).returning();
+
+    if (!rows.length) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found" });
+    }
+
+    return rows;
+  }),
 };
