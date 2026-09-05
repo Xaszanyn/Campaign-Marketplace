@@ -1,8 +1,8 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { Context } from "#/trpc/context";
 import { db } from "@/db";
-import { submissions, campaigns } from "$";
+import { submissions, campaigns, submissionMetrics } from "$";
 import { create, list, listByCampaign, approve, reject } from "&/submission";
 import { requireAdmin, requireCreator } from "#/trpc/middleware";
 import { validatePostUrl } from "#/services/validation";
@@ -12,6 +12,7 @@ import {
 } from "#/services/approval";
 
 type CreateInput = z.infer<typeof create>;
+type ListInput = z.infer<typeof list>;
 type ListByCampaignInput = z.infer<typeof listByCampaign>;
 type ApproveInput = z.infer<typeof approve>;
 type RejectInput = z.infer<typeof reject>;
@@ -21,13 +22,17 @@ export const submissionRouter = {
     .input(create)
     .mutation(async ({ input, ctx }: { input: CreateInput; ctx: Context }) => {
       const campaign = await db
-        .select({ platforms: campaigns.platforms })
+        .select({ platforms: campaigns.platforms, status: campaigns.status })
         .from(campaigns)
         .where(eq(campaigns.id, input.campaign))
         .limit(1);
 
       if (!campaign.length) {
         throw new Error("Campaign not found");
+      }
+
+      if (campaign[0].status !== "active") {
+        throw new Error("Campaign is not accepting submissions");
       }
 
       if (!validatePostUrl(input.postUrl, campaign[0].platforms)) {
@@ -48,12 +53,54 @@ export const submissionRouter = {
         })
         .returning();
     }),
-  list: requireCreator.input(list).query(async ({ ctx }: { ctx: Context }) =>
-    db
-      .select()
+  list: requireCreator.input(list).query(async ({ input, ctx }: { input: ListInput; ctx: Context }) => {
+    const conditions = [eq(submissions.creator, ctx.user?.id || "")];
+
+    if (input.status) {
+      conditions.push(eq(submissions.status, input.status));
+    }
+
+    const rows = await db
+      .select({
+        id: submissions.id,
+        campaign: submissions.campaign,
+        campaignTitle: campaigns.title,
+        postURL: submissions.postURL,
+        platform: submissions.platform,
+        status: submissions.status,
+        rejectionReason: submissions.rejectionReason,
+        created: submissions.created,
+        payout: campaigns.payout,
+      })
       .from(submissions)
-      .where(eq(submissions.creator, ctx.user?.id || "")),
-  ),
+      .innerJoin(campaigns, eq(submissions.campaign, campaigns.id))
+      .where(and(...conditions));
+
+    const ids = rows.map((row) => row.id);
+
+    const latestMetrics = ids.length
+      ? await db
+          .selectDistinctOn([submissionMetrics.submission], {
+            submission: submissionMetrics.submission,
+            views: submissionMetrics.views,
+          })
+          .from(submissionMetrics)
+          .where(inArray(submissionMetrics.submission, ids))
+          .orderBy(submissionMetrics.submission, desc(submissionMetrics.date))
+      : [];
+
+    const viewsBySubmission = new Map(latestMetrics.map((metric) => [metric.submission, metric.views]));
+
+    return rows.map(({ payout, ...row }) => {
+      const views = viewsBySubmission.get(row.id) ?? 0;
+      const earnings =
+        row.status === "approved" || row.status === "paid"
+          ? Math.floor(views / 1000) * payout
+          : 0;
+
+      return { ...row, views, earnings };
+    });
+  }),
   listByCampaign: requireAdmin.input(listByCampaign).query(async ({ input }: { input: ListByCampaignInput }) => {
     const conditions = [eq(submissions.campaign, input.campaign)];
 

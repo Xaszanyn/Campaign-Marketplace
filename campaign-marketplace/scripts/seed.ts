@@ -14,17 +14,6 @@ type Platform = (typeof platformList)[number];
 async function seed() {
   console.log("Seeding database...");
 
-  // Ensure submission_status enum exists
-  try {
-    await db.execute(
-      `CREATE TYPE IF NOT EXISTS "public"."submission_status" AS ENUM('pending', 'approved', 'rejected', 'paid');`,
-    );
-  } catch (err: any) {
-    if (!err.message.includes("already exists")) {
-      console.warn("Warning creating submission_status:", err.message);
-    }
-  }
-
   const seedUsers = [
     {
       name: "Ekin Aslan",

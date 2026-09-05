@@ -19,15 +19,8 @@
     {
       "idx": 2,
       "version": "7",
-      "when": 1788542355210,
-      "tag": "0002_small_scorpion",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1788542977049,
-      "tag": "0003_striped_talos",
+      "when": 1788599856514,
+      "tag": "0002_flimsy_ben_urich",
       "breakpoints": true
     }
   ]

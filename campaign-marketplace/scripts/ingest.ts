@@ -69,7 +69,9 @@ async function ingest() {
   }
 }
 
-ingest().catch((error) => {
-  console.error("Fatal error:", error);
-  process.exit(1);
-});
+ingest()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error("Fatal error:", error);
+    process.exit(1);
+  });
