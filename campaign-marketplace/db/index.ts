@@ -1,13 +1,13 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
-const { POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_PORT, POSTGRES_DB } =
-  process.env;
+const user = process.env.POSTGRES_USER || "wayv_service";
+const password = process.env.POSTGRES_PASSWORD || "Yvd@BKWZ=WR+Eh0H";
+const port = process.env.POSTGRES_PORT || "5432";
+const db_name = process.env.POSTGRES_DB || "campaign_marketplace";
 
 export const db = drizzle(
   postgres(
-    `postgresql://${POSTGRES_USER}:${encodeURIComponent(
-      POSTGRES_PASSWORD!,
-    )}@localhost:${POSTGRES_PORT}/${POSTGRES_DB}`,
+    `postgresql://${user}:${encodeURIComponent(password)}@localhost:${port}/${db_name}`,
   ),
 );

@@ -1,9 +1,9 @@
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import type { Context } from "#/trpc/context";
 import { db } from "@/db";
 import { submissions, campaigns } from "$";
-import { create, list, approve, reject } from "&/submission";
+import { create, list, listByCampaign, approve, reject } from "&/submission";
 import { requireAdmin, requireCreator } from "#/trpc/middleware";
 import { validatePostUrl } from "#/services/validation";
 import { checkDuplicateSubmission } from "#/services/submission";
@@ -12,6 +12,7 @@ import {
 } from "#/services/approval";
 
 type CreateInput = z.infer<typeof create>;
+type ListByCampaignInput = z.infer<typeof listByCampaign>;
 type ApproveInput = z.infer<typeof approve>;
 type RejectInput = z.infer<typeof reject>;
 
@@ -53,6 +54,18 @@ export const submissionRouter = {
       .from(submissions)
       .where(eq(submissions.creator, ctx.user?.id || "")),
   ),
+  listByCampaign: requireAdmin.input(listByCampaign).query(async ({ input }: { input: ListByCampaignInput }) => {
+    const conditions = [eq(submissions.campaign, input.campaign)];
+
+    if (input.status) {
+      conditions.push(eq(submissions.status, input.status));
+    }
+
+    return db
+      .select()
+      .from(submissions)
+      .where(and(...conditions));
+  }),
   approve: requireAdmin
     .input(approve)
     .mutation(async ({ input }: { input: ApproveInput }) => {

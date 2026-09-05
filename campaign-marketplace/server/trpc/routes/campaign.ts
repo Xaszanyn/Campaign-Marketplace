@@ -2,13 +2,14 @@ import { eq, ilike, and, count, SQL } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { campaigns } from "$";
-import { create, get, list, update } from "&/campaign";
+import { create, get, list, update, delete_ } from "&/campaign";
 import { requireAdmin } from "#/trpc/middleware";
 
 type ListInput = z.infer<typeof list>;
 type GetInput = z.infer<typeof get>;
 type CreateInput = z.infer<typeof create>;
 type UpdateInput = z.infer<typeof update>;
+type DeleteInput = z.infer<typeof delete_>;
 
 export const campaignRouter = {
   list: requireAdmin.input(list).query(async ({ input }: { input: ListInput }) => {
@@ -60,4 +61,7 @@ export const campaignRouter = {
       .where(eq(campaigns.id, id))
       .returning();
   }),
+  delete: requireAdmin.input(delete_).mutation(async ({ input }: { input: DeleteInput }) =>
+    db.delete(campaigns).where(eq(campaigns.id, input.id)).returning(),
+  ),
 };

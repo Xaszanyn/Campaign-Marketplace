@@ -21,6 +21,8 @@ export const update = campaign.extend(id);
 
 export const get = z.object(id);
 
+export const delete_ = z.object(id);
+
 export const list = z.object({
   page: z.number().int().positive().default(1),
   limit: z.number().int().positive().default(10),

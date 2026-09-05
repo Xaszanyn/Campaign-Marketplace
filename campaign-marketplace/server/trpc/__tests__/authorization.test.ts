@@ -41,16 +41,16 @@ describe("Access control", () => {
 
   describe("Ownership validation", () => {
     it("creator can only see their own submissions", () => {
-      const creatorId = "creator-123";
-      const submissionCreatorId = "creator-123";
+      const creatorId: string = "creator-123";
+      const submissionCreatorId: string = "creator-123";
 
       const isOwner = creatorId === submissionCreatorId;
       expect(isOwner).toBe(true);
     });
 
     it("creator cannot see another creator's submissions", () => {
-      const creatorId = "creator-123";
-      const submissionCreatorId = "creator-456";
+      const creatorId: string = "creator-123";
+      const submissionCreatorId: string = "creator-456";
 
       const isOwner = creatorId === submissionCreatorId;
       expect(isOwner).toBe(false);

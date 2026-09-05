@@ -16,6 +16,11 @@ export const list = z.object({
   status: z.enum(submissionStatusList).optional(),
 });
 
+export const listByCampaign = z.object({
+  campaign: z.string(),
+  status: z.enum(submissionStatusList).optional(),
+});
+
 export const approve = z.object(id);
 
 export const reject = z.object({
